@@ -4,68 +4,115 @@ inquirer.registerPrompt('autocomplete', require('inquirer-autocomplete-prompt'))
 const Rx = require('rxjs')
 const chalk = require('chalk')
 
-const { getAccountInfo, 
-        subscribeStream, 
+// local
+const { initExchange, 
+        // subscribeStream, 
         createOrder,
         getOpenOrders,
         cancelOrders,
-        getExchangeInfo
-} = require('./exchange');
+        getAccountInfo
+} = require('./binance');
+const { subscribeStream } = require('./exchange');
 
-const { questions } = require('../lib')
+const { questions, helpers: { readExchangeData } } = require('../lib');
 
-// const ui = new inquirer.ui.BottomBar();
+// const ui = new inquirer.ui.BottomBar({
+//     bottomBar: "First bottom bar message"
+// });
+// let i = 0;
 
+// setInterval(() => {
+//     ui.updateBottomBar("\n\nbottom bar message: " + i)
+//     i++;
+
+// }, 2000)
+
+// globals
 const obs = new Rx.Subject();    // observable
 
-
 const start = async () => {
+    let [ws, { exchange }] = await Promise.all([
+        subscribeStream({user: true, obs: obs}),
+        initExchange()
+    ])
+
+    _start(ws, exchange);
+}
+
+
+const _start = async (ws, exchange) => {
+    let delay;
+
     log(chalk.blue("Welcome to trade delay monitor"), pad=true)
 
     obs.subscribe(
         async (event) => {
             // console.log(event)
-            let action, run;
-
 
             switch (event.name) {
                 case 'streamStarted':
-                    console.log(chalk.green("\nConnection to user stream successful!"))
-                    await runMain(ws, account, exchange, action)
+                    console.log(chalk.green("\nConnection to user stream successful!\n"))
+                    // ui.log.write(chalk.green("\nConnection to user stream successful!"))
                     break;
                 case 'data':
-                    let streamData = event.data.data;
-
-                    if (streamData.e === 'executionReport') {
-                        switch (streamData.x) {
-                            case 'EXPIRED':
-                                log("Order has been rejected!");
-                                // log(chalk.red(JSON.sstreamData))
-                                console.log(streamData)
-                                await runMain(ws, account, exchange)
-                                break;
-                            case 'TRADE':
-                                if (streamData.X === 'PARTIALLY_FILLED') {
-                                    console.log('PARTIAL_FILL')
-                                    getDelay(streamData.T)
-                                    break;
-                                }
-                                console.log('TRADE_COMPLETE');
-                                getDelay(streamData.T)
-                                await runMain(ws, account, exchange)
-                                break;
-                        
-                            default:
-                                break;
-                        }
-                    }
-
+                    // handle socket stream data
+                    _handleStreamData(event.data.data);
                     break;
-                case 'createOrder':
-                    log('', cls=true)   // clear screen
+                case 'delayCheck':
+                    // 1. Wait for the user stream to start if it hasn't yet
+                    if (ws.readyState !== ws.OPEN) {
+                        setTimeout(() => {
+                            console.log("waiting for stream start...")
+                            obs.next(event)     // emit same event
+                        }, 300)
+                        break;
+                    }
+                    
+                    // console.log("Stream is connected")
+                    
+                    // 2. Submit Limit order with users input params
+                    const limitParams = {...event.data.orderParams, type: 'LIMIT'}
+                    console.log("submitting limit order", {limitParams})
+                    const limitOrder = await createOrder(limitParams);
+
+                    // sanity check if order happened
+
+                    // 3. wait a while
+                    console.log("waiting for 5s")
+                    await new Promise(resolve => {
+                        setTimeout(() => {
+                            resolve()
+                        }, 5000)
+                    })
+
+                    // 4. Submit market order on same symbol with same quantity to fully fill 
+
+                    const marketParams = {
+                        ...event.data.orderParams,
+                        type: 'MARKET',
+                        side: event.data.orderParams.side === 'BUY' ? 'SELL' : 'BUY'
+                    }
+                    delete marketParams.price
+                    delete marketParams.priceModifier
+                    console.log("submitting market order", {marketParams})
+                    const marketOrder = await createOrder(marketParams);
+
+                    // listen to events from user stream
+
+
+                    // 5. return measured delays (min, max, avg)
+
                     break;
                 case 'main':
-                    await runMain(ws, account, exchange);
+                    await runMain(exchange);
+                    break;
+                case 'done':
+                    // close stream, which will emit streamClosed event on close
+                    ws.close();
+                    break;
+                case 'streamClosed':
+                    // streamClosed event -> we can safely exit the app
+                    obs.complete();     // initiate teardown
                     break;
             
                 default:
@@ -76,36 +123,22 @@ const start = async () => {
             console.log(`Error: ${err}`)
         },
         () => {                                             // completed handler function
-            console.log("Exiting")
             exit()
         }
     )
-    
-    // data needed from exchange for app to work
-    let [account, exchange] = await Promise.all([
-        getAccountInfo(),
-        getExchangeInfo()
-    ]);                             // fetch all together
 
-
-    // connect to user stream on app startup
-    let ws;
-    ws = await subscribeStream({user: true, obs: obs});
-
+    await runMain(exchange);
 }
 
-const runMain = async (stream, account, exchange, action) => {
+const runMain = async exchange => {
     let symbol;
     
-    const accountTokens = account.balances.map(e => e.asset);
     const supportedPairs = exchange.symbols.map(e => e.symbol);
 
     // prompt for action
 
-    if (typeof action === 'undefined') {
-        action = await promptAction("mainAction");
-        action = action.main;
-    }
+    let action = await promptAction("mainAction");
+    action = action.main;
 
     switch (action) {
         // exchange actions
@@ -123,32 +156,38 @@ const runMain = async (stream, account, exchange, action) => {
             break;
 
         case 'closeStream':
-            stream.close();
+            // stream.close();
+            obs.next({ name: 'closeStream' });
             break;
-
-        case 'createOrder':
+        
+        case 'delayCheck':
 
             const userInput = await promptAction('createOrder', supportedPairs);
             // console.log(userInput)
+            const delay = userInput.delay;
+            delete userInput.delay
+
             let orderParams = {
-                recvWindow: 10000
+                recvWindow: 5000
             }
 
             orderParams = {...orderParams, ...userInput}
             
-            obs.next({name: 'createOrder'})
-
-            const order = await createOrder(orderParams)
-
-            // console.log({order})
-            if (order.code) {
-                log(chalk.red(`Order request failed!\n${JSON.stringify(order)}`), pad=true);
-                obs.next({name: 'main'})
-            }
+            obs.next({name: 'delayCheck', data: {orderParams: orderParams, delay: delay}})
+            // obs.next({name: 'delayCheck', data: {}})
             break;
 
         case 'cancelOrder':
             symbol = await promptAction('symbol', supportedPairs);
+
+
+            const hasOpenOrders = await getOpenOrders(symbol.symbol);
+            if (hasOpenOrders.length < 1) {
+                log(chalk.green(`No open orders for ${symbol.symbol}`));
+                obs.next({name: 'main'});
+                break;
+            }
+
             const cancel = await cancelOrders(symbol.symbol)
 
             log(chalk.green("Cancel succesfull"), pad=true)
@@ -158,28 +197,62 @@ const runMain = async (stream, account, exchange, action) => {
             break;
 
         case 'getOpenOrders':
-            
-            symbol = await promptAction('symbol', supportedPairs);
-            const openOrders = await getOpenOrders(symbol.symbol)
+            symbol = await promptAction('symbol', ["all", ...supportedPairs]);
+            const openOrders = await getOpenOrders(symbol.symbol, all=symbol.symbol === "true"? true : false)
             
             log(chalk.green(JSON.stringify(openOrders)));
 
             obs.next({name: 'main'})
-            
             break;
 
         case 'done':
             // explicit exit
-            obs.complete();
+            obs.next({name: 'done'});
+            break;
         default:
             console.log(chalk.red(`Unrecognized action: ${action.action}`))
+            obs.next({name: 'main'})
     }
 
     return true
 }
 
+
+const _handleStreamData = streamData => {
+    if (streamData.e === 'executionReport') {
+        _handleExecutionReport(streamData);
+    }
+}
+
+const _handleExecutionReport = report => {
+    switch (report.x) {
+        case 'EXPIRED':
+            log(chalk.red("Order has been rejected!"));
+            delay = getDelay(report.T)
+            console.log(chalk.bold(chalk.red(`Delay was: ${delay} ms`)))
+            
+            // await runMain(exchange)
+            break;
+        case 'TRADE':
+            if (report.X === 'PARTIALLY_FILLED') {
+                console.log('PARTIAL_FILL')
+                delay = getDelay(report.T)
+                console.log(chalk.bold(chalk.red(`Delay was: ${delay} ms`)))
+                break;
+            }
+            console.log('TRADE_COMPLETE');
+            delay = getDelay(report.T)
+            console.log(chalk.bold(chalk.red(`Delay was: ${delay} ms`)))
+            // await runMain(exchange)
+            break;
+    
+        default:
+            break;
+    }
+}
+
 const exit = () => {
-    console.log(chalk.blue("Bye bye 👋"));
+    console.log(chalk.blue("Thank you for visiting! Come again... 👋"));
     process.exit(0);
 }
 
@@ -196,32 +269,26 @@ const promptAction = async (action, inputData) => {
 // Helpers
 
 const getDelay = responseTime => {
-    console.log(responseTime)
-    responseTime = +responseTime;       // convert to number
     // console.log(responseTime)
 
-    let time_now = new Date().getTime();
-
-    let delay = time_now - responseTime;
-    console.log(delay)
-
-    return delay;
-
+    // let time_now = new Date().getTime();
+    // let delay = time_now - responseTime;
+    // console.log(delay)
+    
+    // return delay;
+    
+    return new Date().getTime() - responseTime;
 }
 
 
-const log = (input, pad=false, cls=false) => {
-    if (cls) {
-        console.log("\033[2J\033[0f")   // clear screen
-    }
-
+const log = (input, pad=false) => {
     if (pad) {
         input = _padResponse(input);
     }
     console.log(input);
 }
 
-const _padResponse = text => `\n${text}\n\n`;
+const _padResponse = text => `\n${text}\n`;
 
 module.exports = {
     start: start

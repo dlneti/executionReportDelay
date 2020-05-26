@@ -14,88 +14,6 @@ const ROOT_URL = "testnet.binance.vision";
 const API_URI = "/api/v3";
 const STREAM_URI = "/stream";
 
-const getExchangeInfo = async () => {
-    const data = await _fetchAPI({endpoint: "exchangeInfo"})
-    // console.log(data);
-    return data
-}
-
-const getAccountInfo = async () => {
-    const data = await _fetchAPI({
-        endpoint: "account", 
-        authRequired: true,
-        signatureRequired: true,
-        params: {}
-    })
-
-    return data;
-}
-
-const createOrder= async params => {
-
-    if (params.type === 'LIMIT') {
-        let curPrice = await getSymbolPrice(params.symbol);
-        console.log(curPrice)
-
-        // TODO add price transformation to comply with filters
-
-        params.price = (+curPrice.price * +params.priceModifier).toFixed(8)
-        delete params.priceModifier
-
-        params.timeInForce = 'GTC'
-    }
-
-    console.log(params)
-
-    const order = await _fetchAPI({
-        endpoint: 'order',
-        authRequired: true,
-        signatureRequired: true,
-        method: 'POST',
-        params: params
-    })
-
-    return order
-}
-
-const getOpenOrders = async symbol => {
-    const orders = await _fetchAPI({
-        endpoint: 'openOrders',
-        authRequired: true,
-        signatureRequired: true,
-        params: {
-            symbol: symbol
-        }
-    })
-
-    return orders
-}
-
-const cancelOrders = async symbol => {
-    const orders = await _fetchAPI({
-        endpoint: 'openOrders',
-        authRequired: true,
-        signatureRequired: true,
-        params: {
-            symbol: symbol
-        },
-        method: 'DELETE',
-    })
-
-    return orders
-}
-
-
-const getSymbolPrice = async symbol => {
-    const res = await _fetchAPI({
-        endpoint: 'ticker/price',
-        params: {
-            symbol: symbol
-        }
-    })
-
-    return res
-}
 
 const _fetchData = async ({
     params = {},
@@ -253,7 +171,7 @@ const _keepAlive = async key => {
 }
 
 const subscribeStream = async ({user = false, obs}) => {
-    let listenKey, streamStarted;
+    let listenKey, streamStarted, pongInterval;
     let url = `${PROTOCOL_STREAM}${ROOT_URL}${STREAM_URI}`;
 
     if (user) {
@@ -263,14 +181,34 @@ const subscribeStream = async ({user = false, obs}) => {
 
     const ws = new WebSocket(url);
 
-
     ws.on('open', () => {
         streamStarted = new Date();
         obs.next({name: 'streamStarted'})
+
+        // set pong interval to prevent 1006
+        pongInterval = setInterval(() => {
+            // console.log("sending pong ... ");
+            ws.pong();
+
+            // check if keepAlive to stream needs to be sent (every 30min)
+            let timedelta = new Date() - streamStarted;
+            if (timedelta > 1000 * 60 * 30) {
+                console.log("Sending keepAlive request")
+                listenKey = _keepAlive(listenKey);
+            }
+        }, 1000 * 60)
     })
     
     ws.on('close', (code, reason) => {
-        console.log({code, reason})
+        // console.log({code, reason})
+        if (code === 1005) {
+            console.log('Stream closed OK')
+        } else {
+            console.error('Unexpected stream close!', {code, reason})
+        }
+
+        clearInterval(pongInterval);
+        obs.next({name: 'streamClosed'});   // emit streamClosed action
     })
     
     ws.on('message', data => {
@@ -288,25 +226,14 @@ const subscribeStream = async ({user = false, obs}) => {
     })
 
     ws.on('ping', data => {
-        console.log("Received ping " + JSON.stringify(data))
-        ws.pong(data);
-
-        // check if need to send keepAlive
-        let timedelta = new Date() - streamStarted;
-        if (timedelta > 1000 * 60 * 30) {
-            console.log("Sending keepAlive request")
-            listenKey = _keepAlive(listenKey);
-        }
+        // console.log("Received ping " + data)
+        ws.pong();
     })
 
     return ws
 }
 
 module.exports = {
-    getAccountInfo: getAccountInfo,
-    subscribeStream: subscribeStream,
-    createOrder: createOrder,
-    getOpenOrders: getOpenOrders,
-    cancelOrders: cancelOrders,
-    getExchangeInfo: getExchangeInfo
+    _fetchAPI: _fetchAPI,
+    subscribeStream: subscribeStream
 }
