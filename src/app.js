@@ -11,7 +11,7 @@ const { initExchange,
         getAccountInfo
 } = require('./binance');
 const { subscribeStream } = require('./exchange');
-const { questions, helpers: { readExchangeData } } = require('../lib');
+const { questions } = require('../lib');
 
 // globals
 const obs = new Rx.Subject();    // observable
@@ -34,7 +34,7 @@ const start = async () => {
         _log(chalk.red(`Error connecting to stream!`))
         return false
     }
-
+    
     await _start(ws, exchange);
 }
 

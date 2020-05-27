@@ -7,8 +7,19 @@ const { helpers: { saveExchangeData, readExchangeData } } = require('../lib')
 
 
 const initExchange = async () => {
+    let saved;
     const data = await _getExchangeData()
-    await saveExchangeData({...data, last_saved: new Date().getTime()})    // save to fs
+    
+    try {
+        saved = await saveExchangeData({...data, last_saved: new Date().getTime()})    // save to fs
+    } catch (err) {
+        console.log(err)
+    }
+
+    if (!saved) {
+        console.log("Error saving file to FS!");
+    }
+
     return data
 }
 
@@ -25,11 +36,16 @@ const getAccountInfo = async () => {
 
 const _getExchangeInfo = async () => {
     // read cached data
-    const cached = readExchangeData();
-
-    if (new Date().getTime() - cached.last_saved > 1000 * 60 * 60 * 24) {       // 1 day
-        return cached.exchange;
+    let cached;
+    try {
+        cached = await readExchangeData();
+        if (new Date().getTime() - cached.last_saved > 1000 * 60 * 60 * 24) {       // 1 day
+            return cached.exchange;
+        }
+    } catch (err) {
+        // file doesnt exist yet
     }
+
 
     let exchangeInfo = await _fetch({endpoint: 'exchangeInfo'});
 

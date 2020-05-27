@@ -1,9 +1,10 @@
 {
   "name": "trade-delay-check",
-  "version": "0.1.0",
-  "description": "",
+  "version": "0.2.0",
+  "description": "Measures execution delay of a matched trade. You can also cancel orders, and see you balances.",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "test": "jest"
   },
   "keywords": [],
