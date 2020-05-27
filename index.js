@@ -1,3 +1,3 @@
-const cli = require('./src');
+const app = require('./src');
 
-cli(process.argv);
+app.start();

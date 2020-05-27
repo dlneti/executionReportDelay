@@ -1,9 +1,27 @@
 // local
-const { _fetchAPI: _fetch} = require('./exchange');
+const { fetchApi: _fetch} = require('./exchange');
 const { helpers: { saveExchangeData, readExchangeData } } = require('../lib')
 
 
 // ================= metadata functions START =================
+
+
+const initExchange = async () => {
+    const data = await _getExchangeData()
+    await saveExchangeData({...data, last_saved: new Date().getTime()})    // save to fs
+    return data
+}
+
+const getAccountInfo = async () => {
+    const data = await _fetch({
+        endpoint: "account", 
+        authRequired: true,
+        signatureRequired: true,
+        params: {}
+    })
+    
+    return data;
+}
 
 const _getExchangeInfo = async () => {
     // read cached data
@@ -13,38 +31,18 @@ const _getExchangeInfo = async () => {
         return cached.exchange;
     }
 
-    return _fetch({endpoint: "exchangeInfo"})
-}
+    let exchangeInfo = await _fetch({endpoint: 'exchangeInfo'});
 
-const _getAccountInfo = async () => {
-    const data = await _fetch({
-        endpoint: "account", 
-        authRequired: true,
-        signatureRequired: true,
-        params: {}
-    })
+    if (!exchangeInfo.ok) {
+        return false;
+    }
 
-    return data;
-}
-
-
-const initExchange = async () => {
-    const data = await _getExchangeData()
-    await saveExchangeData({...data, last_saved: new Date().getTime()})    // save to fs
-
-    return data
+    return exchangeInfo.data;
 }
 
 const _getExchangeData = async () => {
-    let [exchange, user] = await Promise.all([
-        _getExchangeInfo(),
-        // _getAccountInfo()
-    ])
-
-    return {
-        // user: user,
-        exchange: exchange
-    }
+    let exchange = await _getExchangeInfo();
+    return {exchange: exchange}
 }
 
 // ================= metadata functions END =================
@@ -53,9 +51,12 @@ const _getExchangeData = async () => {
 // ================= trade functions START =================
 
 const createOrder = async params => {
-
     if (params.type === 'LIMIT') {
-        params = await _transformLimitOrder(params)
+        params = await _transformLimitOrder(params)     // transform params for limit order
+    }
+
+    if (!params) {
+        return false;
     }
 
     // console.log(params)
@@ -74,18 +75,14 @@ const createOrder = async params => {
 
 const _transformLimitOrder = async order => {
     const newParams = {...order};
-    const { price: curPrice } = await getSymbolPrice(order.symbol);         // get current order price
-    // console.log(curPrice)
-    
-    // get settings for this symbol
-    const { exchange: settings } = await _getExchangeData();
-    const symbolsFiltered = settings.symbols.filter(item => item.symbol === order.symbol)
-
-    if (symbolsFiltered.length !== 1) {
-        console.error(`Symbol ${order.symbol} not found!`)
+    const price = await getSymbolPrice(order.symbol);         // get current order price
+    if (!price.ok) {
+        console.log(chalk.red(`Error fetching price for ${order.symbol}: ${JSON.stringify(price)}`))
         return false;
     }
 
+    const curPrice = price.data.price;
+    
     let inputPrice; 
     if(order.priceModifier)  { 
         inputPrice = curPrice * order.priceModifier
@@ -93,6 +90,19 @@ const _transformLimitOrder = async order => {
      } else { 
         inputPrice = order.price;
      }
+    
+    // get settings for this symbol
+    const { exchange: settings } = await _getExchangeData();
+    if (!settings) {
+        console.log(chalk.red(`Error fetching exchange info`))
+        return false;
+    }
+    const symbolsFiltered = settings.symbols.filter(item => item.symbol === order.symbol);
+
+    if (symbolsFiltered.length !== 1) {
+        console.error(`Symbol ${order.symbol} not found!`)
+        return false;
+    }
 
     // check order against relevant filters and apply fix where needed
     const symbolSettings = symbolsFiltered[0];
@@ -100,17 +110,15 @@ const _transformLimitOrder = async order => {
     try {
         // PRICE_FILTER, applies fix to tickSize
         let fixedPrice = _priceFilter(inputPrice, _getFilter('PRICE_FILTER', symbolSettings.filters));
-        console.log({fixedPrice, inputPrice})
         newParams.price = fixedPrice;   // set valid price to newParams
         
         // PERCENT_PRICE
         let percentResult = _percentPrice(curPrice, _getFilter('PERCENT_PRICE', symbolSettings.filters));
     } catch (err) {
-        console.error(err);
+        console.error(chalk.red(err));
         return false;
     }
-
-    newParams.timeInForce = 'GTC'
+    
     return newParams;
 }
 
@@ -119,12 +127,10 @@ const _priceFilter = (price, filter) => {
     if (price > filter.maxPrice) {
         throw "Price too high!";
     }
-
     // min price
     if (price < filter.minPrice) {
         throw "Price too low!";
     }
-
     // fix tick size  
     const precision = filter.tickSize.indexOf(1) - 1;
     const fixedPrice = price
@@ -139,7 +145,6 @@ const _percentPrice = (price, filter) => {
     if (price > price * filter.multiplierUp) {
         throw "Price too high!";
     }
-
     if (price < price * filter.multiplierDown) {
         throw "Price too low!";
     }
@@ -200,5 +205,5 @@ module.exports = {
     getOpenOrders: getOpenOrders,
     cancelOrders: cancelOrders,
     initExchange: initExchange,
-    getAccountInfo: _getAccountInfo,
+    getAccountInfo: getAccountInfo,
 }

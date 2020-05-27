@@ -1,3 +1,3 @@
-const cli = require('./cli');
+const app = require('./app')
 
-module.exports = cli;
+module.exports = app;
