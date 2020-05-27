@@ -228,7 +228,7 @@ const runMain = async exchange => {
 
         case 'cancelOrder':
             symbol = await _promptAction('symbol', supportedPairs);
-            const hasOpenOrders = await getOpenOrders(symbol.symbol);
+            let hasOpenOrders = await getOpenOrders(symbol.symbol);
 
             if (!hasOpenOrders.ok) {
                 _log(chalk.red(`Error fetching open orders for ${symbol.symbol}: ${JSON.stringify(hasOpenOrders)}`))
@@ -244,7 +244,7 @@ const runMain = async exchange => {
                 break;
             }
 
-            const cancel = await cancelOrders(symbol.symbol)
+            let cancel = await cancelOrders(symbol.symbol)
             if (!cancel.ok) {
                 _log(chalk.green(`Error canceling orders for ${symbol.symbol}: ${cancel}`));
                 obs.next({name: 'main'});
@@ -256,7 +256,7 @@ const runMain = async exchange => {
             break;
         case 'getOpenOrders':
             symbol = await _promptAction('symbol', ["all", ...supportedPairs]);
-            const openOrders = await getOpenOrders(symbol.symbol, all=symbol.symbol === "true"? true : false)
+            let openOrders = await getOpenOrders(symbol.symbol, all=symbol.symbol === "true"? true : false)
 
             if (!openOrders.ok) {
                 _log(chalk.red(`Error getting open orders: ${JSON.stringify(openOrders)}`), pad=true)

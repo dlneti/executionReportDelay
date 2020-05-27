@@ -51,12 +51,12 @@ const _getExchangeData = async () => {
 // ================= trade functions START =================
 
 const createOrder = async params => {
-    if (params.type === 'LIMIT') {
-        params = await _transformLimitOrder(params)     // transform params for limit order
-    }
-
     if (!params) {
         return false;
+    }
+
+    if (params.type === 'LIMIT') {
+        params = await _transformLimitOrder(params)     // transform params for limit order
     }
 
     // console.log(params)

@@ -6,6 +6,9 @@ const { readFile } = require('fs').promises;
 const path = require('path');
 require('dotenv').config({path: path.resolve(__dirname, '../.env')});
 
+// local imports
+const { helpers: { mapParamsToQuery } } = require('../lib');
+
 // setup
 const API_KEY = process.env.API_KEY;
 const PROTOCOL_API = "https://"
@@ -26,12 +29,12 @@ const _fetchData = async ({
 }) => {
     // sanity checks
     if (!endpoint) {
-        console.log(chalk.red("Please provide an endpoint"))
+        console.log(chalk.red("No enpoint provided."))
         return false
     }
 
     if (!apiUri) {
-        console.log(chalk.red("Please provide a URI"))
+        console.log(chalk.red("No API URI provided."))
         return false
     }
 
@@ -45,7 +48,7 @@ const _fetchData = async ({
         params.signature = await _signRequest(params);    // create signature
     }
 
-    const queryString = _mapParamsToQuery(params);
+    const queryString = mapParamsToQuery(params);
     
     if (queryString.length > 1) {
         url += `?${queryString}`;
@@ -75,6 +78,7 @@ const _fetchData = async ({
 }
 
 const fetchApi = async args => {
+    // let signatureRequired = args.signatureRequired || false;    // defalut false
     if (args.signatureRequired) {
         args.params.timestamp = new Date().getTime();   // add timestamp to requests with auth
     }
@@ -82,7 +86,7 @@ const fetchApi = async args => {
 }
 
 const _signRequestHMAC = async params => {
-    const queryString = _mapParamsToQuery(params);
+    const queryString = mapParamsToQuery(params);
     const signature = createHmac('sha256', SECRET_KEY.toString())
         .update(queryString)
         .digest('hex');
@@ -90,7 +94,7 @@ const _signRequestHMAC = async params => {
     return signature;
 }
 const _signRequest = async params => {
-    const queryString = _mapParamsToQuery(params);
+    const queryString = mapParamsToQuery(params);
     
     const sign = createSign('SHA256');
     sign.update(queryString);
@@ -101,15 +105,6 @@ const _signRequest = async params => {
     const encoded = encodeURIComponent(signature.toString());
 
     return encoded;
-}
-
-const _mapParamsToQuery = params => {
-    // return empty string if params are empty
-    if (Object.keys(params).length === 0) {
-        return "";
-    }
-
-    return Object.keys(params).map(key => `${key}=${params[key]}`).join('&');
 }
 
 
