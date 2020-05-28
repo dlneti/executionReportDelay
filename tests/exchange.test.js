@@ -3,6 +3,7 @@ const {
     subscribeStream,
 } = require('../src/exchange.js');
 
+const API_KEY = process.env.API_KEY;
 
 const apiArgs = {
     endpoint: 'exchangeInfo',
@@ -23,3 +24,6 @@ describe('fetchApi call', () => {
     })
 })
 
+test("API_KEY is in .env file", () => {
+    expect(typeof API_KEY === 'undefined').toBe(false);
+})

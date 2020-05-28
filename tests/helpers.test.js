@@ -1,5 +1,4 @@
-const { mapParamsToQuery } = require('../lib/helpers.js');
-
+const { mapParamsToQuery, getPrivateKey } = require('../lib/helpers.js');
 
 describe('mapParamsToQuery call', () => {
     test('returns valid query string', () => {
@@ -14,5 +13,11 @@ describe('mapParamsToQuery call', () => {
     test('returns empty string on no input', () => {
         expect(mapParamsToQuery({})).toBe("");
         expect(mapParamsToQuery()).toBe("");
+    })
+})
+
+describe('getPrivateKey call', () => {
+    test('private key is in /test directory', () => {
+        expect(typeof getPrivateKey() === 'undefined').toBe(false);
     })
 })

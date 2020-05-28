@@ -7,10 +7,23 @@ const path = require('path');
 require('dotenv').config({path: path.resolve(__dirname, '../.env')});
 
 // local imports
-const { helpers: { mapParamsToQuery } } = require('../lib');
+const { helpers: { mapParamsToQuery, getPrivateKey } } = require('../lib');
 
 // setup
 const API_KEY = process.env.API_KEY;
+// apikey sanity check
+if (typeof API_KEY !== 'string') {
+    console.error("API_KEY not found in .env file.")
+    process.exit(1);
+}
+
+const PRIVATE_KEY = getPrivateKey();
+// private key sanity check
+if (!PRIVATE_KEY) {
+    console.error("Private key not found in /keys directory!")
+    process.exit(1);
+}
+
 const PROTOCOL_API = "https://"
 const PROTOCOL_STREAM = "wss://"
 const ROOT_URL = "testnet.binance.vision";
@@ -128,8 +141,7 @@ const _signRequest = async params => {
     sign.update(queryString);
     sign.end();
     
-    const pk = await readFile(`${__dirname}/../keys/app-prv-key.pem`);
-    const signature = sign.sign(pk, 'base64');
+    const signature = sign.sign(PRIVATE_KEY, 'base64');
     const encoded = encodeURIComponent(signature.toString());
 
     return encoded;
