@@ -18,8 +18,8 @@ const obs = new Rx.Subject();    // observable
 
 
 /**
- * Public start function. This is first function run on app start
- * Calls private _start function which contains app logic
+ * Public start function. This is first function run on app start.
+ * Calls private _start function which contains app logic.
  */
 const start = async () => {
     // load data needed for app to work
@@ -44,7 +44,7 @@ const start = async () => {
 }
 
 /**
- * This is the last function app will run
+ * This is the last function app will run.
  * Exits the program
  */
 const exit = () => {
@@ -53,10 +53,10 @@ const exit = () => {
 }
 
 /**
- * Subscribes to observable and defines logic for all events throughout the app
- * Runs main menu function
+ * Subscribes to observable and defines logic for all events throughout the app.
+ * Runs main menu function.
  * @param {WebSocket} ws websocket stream inscance
- * @param {Object} exchange data needed by the app. stored in memory
+ * @param {Object} exchange data needed by the app. stored in memory.
  */
 const _start = async (ws, exchange) => {
     let streamData = {orders: [], delay: 0};
@@ -134,7 +134,7 @@ const _start = async (ws, exchange) => {
                         _log(chalk.red("Error creating order: ", JSON.stringify(limitOrder)));
                         _log(chalk.red(`Order params: ${JSON.stringify(limitParams)}`));
                         obs.next({name: 'main'});
-                        break;
+                        break;  // exit event
                     }
 
                     _log(chalk.green(`Order submitted:\n${_getTradeString(limitOrder.data)}\n`))
@@ -199,7 +199,7 @@ const _start = async (ws, exchange) => {
 }
 
 /**
- * This is the main menu. Prompts user for action and emits the action to the observable
+ * This is the main menu. Prompts user for action and emits the action to the observable.
  * @param {Object} exchange exchange metadata such as supported pairs
  */
 const runMain = async exchange => {
@@ -304,9 +304,9 @@ const runMain = async exchange => {
 }
 
 /**
- * Top level function for handling websocket stream data
- * Calls other handler functions based on type of data
- * Returns handled data
+ * Top level function for handling websocket stream data.
+ * Calls other handler functions based on type of data.
+ * Returns handled data.
  * @param {Object} streamData data frame from websocket stream
  */
 const _handleStreamData = streamData => {
@@ -319,10 +319,10 @@ const _handleStreamData = streamData => {
 }
 
 /**
- * Handler function to handle executionReport type data frames
+ * Handler function to handle executionReport type data frames.
  * Main goal is to measure delay of these data frames.
- * Logs trade messages from stream to console
- * Returns Object with measured delay and flag if current delay check session should be terminated
+ * Logs trade messages from stream to console.
+ * Returns Object with measured delay and flag if current delay check session should be terminated.
  * @param {Object} report data frame from websocket stream
  */
 const _handleExecutionReport = report => {
@@ -383,7 +383,7 @@ const _getDelayReport = reportData => {
 }
 
 /**
- * Helper function, returns string with parsed data from trade data frames
+ * Helper function, returns string with parsed data from trade data frames.
  * @param {Array} orders array of trade data frames
  */
 const _getTradeDelayString = orders => {
@@ -411,7 +411,7 @@ const _getTradeString = order => {
 }
 
 /**
- * Renders an Inquirer prompt from imported from lib/helpers/questions.js
+ * Renders an Inquirer prompt from imported from lib/helpers/questions.js.
  * @param {string} action action to be prompted
  * @param {*} inputData data needed for prompt rendering
  */
@@ -421,11 +421,10 @@ const _promptAction = async (action, inputData) => {
     return answers;
 }
 
-
 // Helpers
 
 /**
- * Returns difference of incoming timestamp and now (delay)
+ * Returns difference of incoming timestamp and now (delay).
  * @param {number} responseTime timestamp
  */
 const _getDelay = responseTime => {
@@ -433,7 +432,7 @@ const _getDelay = responseTime => {
 }
 
 /**
- * Helper function to log input to console with some additional features
+ * Helper function to log input to console with some additional features.
  * Here logging feature can be added in the future.
  * @param {string} input input to be logged to console
  * @param {Boolean} pad true if input should be padded by empty lines

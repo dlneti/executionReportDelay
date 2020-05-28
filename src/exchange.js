@@ -19,19 +19,19 @@ const STREAM_URI = "/stream";
 
 
 /**
- * Submits a request to API with incoming parameters
- * Handles auth automatically (see authRequired and signatureRequired params)
- * Maps request parameters to query string (empty string for empty params object)
- * POST request with body currently not supported
+ * Submits a request to API with incoming parameters.
+ * Handles auth automatically (see authRequired and signatureRequired params).
+ * Maps request parameters to query string (empty string for empty params object).
+ * POST request with body currently not supported.
  * 
- * Returns Object with either response data or error and 'ok' flag indicating if request failed or succeeded
- * @param {Object} params request parameters
- * @param {Object} headers request headers 
- * @param {string} method request method
- * @param {string} endpoint api endpoint
+ * Returns Object with either response data Object or error Object and 'ok' flag indicating if request failed or succeeded.
+ * @param {Object} params request parameters                     // default empty 
+ * @param {Object} headers request headers                       // default empty
+ * @param {string} method request method                         // default 'GET'
+ * @param {string} endpoint api endpoint                
  * @param {string} apiUri api uri, this is concatenated after root URL
- * @param {Boolean} authRequired if true, auth header will be added
- * @param {Boolean} signatureRequired if true signature and timestamp will be added to query string
+ * @param {Boolean} authRequired if true, auth header will be added                                         // default false
+ * @param {Boolean} signatureRequired if true signature and timestamp will be added to query string         // default false
  */
 const _fetchData = async ({
     params = {},
@@ -60,7 +60,7 @@ const _fetchData = async ({
     }
     
     if (signatureRequired) {
-        params.timestamp = new Date().getTime();   // add timestamp to requests with auth
+        params.timestamp = new Date().getTime();          // add timestamp to requests with auth
         params.signature = await _signRequest(params);    // create signature
     }
 
@@ -95,8 +95,8 @@ const _fetchData = async ({
 
 
 /**
- * Public wrapper function for _fetchApi method
- * Returns response Object
+ * Public wrapper function for _fetchApi method.
+ * Returns response Object.
  * @param {Object} args request params
  */
 const fetchApi = async args => {
@@ -104,8 +104,8 @@ const fetchApi = async args => {
 }
 
 /**
- * Returns HMAC signature of request parameters parsed to queryString;
- * @param {Object} params request parameters
+ * Returns HMAC signature of request parameters parsed to queryString.
+ * @param {Object} params request parameters.
  */
 const _signRequestHMAC = async params => {
     const queryString = mapParamsToQuery(params);
@@ -117,8 +117,8 @@ const _signRequestHMAC = async params => {
 }
 
 /**
- * Signs request parameters with private key saved locally, converted to base64
- * Returns URL encoded signature
+ * Signs request parameters parsed to queryString with locall saved private key, converts to base64.
+ * Returns URL encoded signature.
  * @param {Object} params request parameters
  */
 const _signRequest = async params => {
@@ -136,6 +136,9 @@ const _signRequest = async params => {
 }
 
 
+/**
+ * Fetches listenKey (string) from binance 'userDataStream' endpoint.
+ */
 const _getListenKey = async () => {
     const key = await fetchApi({
         endpoint: 'userDataStream',
@@ -152,6 +155,12 @@ const _getListenKey = async () => {
     return key.data.listenKey;
 }
 
+/**
+ * Sends 'PUT' request to 'userDataStream' endpoint .
+ * Endpoint returns valid listenKey.
+ * Returns fresh listenKey.
+ * @param {string} key listenKey
+ */
 const _keepAlive = async key => {
     const refreshed = await fetchApi({
         endpoint: 'userDataStream',
@@ -170,12 +179,12 @@ const _keepAlive = async key => {
 }
 
 /**
- * Subscribes to Binance websocket stream.
- * Sends pong on every ping, also sends unsolicited pong frames to prevent from websocket from unexpected closing
- * Sends keepAlive request every 30 mins
- * Frames coming from websocket are emitted to the observable
+ * Public function, subscribes to Binance websocket stream.
+ * Sends pong on every ping, also sends unsolicited pong frames to prevent from websocket from unexpected closing.
+ * Sends keepAlive request every 30 mins.
+ * Frames coming from websocket are emitted to the observable.
  * 
- * Returns websocket instance
+ * Returns websocket instance.
  * @param {Boolean} auth if true, subscribes to user data stream
  * @param {Rx.Subject} obs rx observable
  */
@@ -206,7 +215,7 @@ const subscribeStream = async (auth=true, obs) => {
             let timedelta = new Date() - refreshTime;
             if (timedelta > 1000 * 60 * 30) {
                 console.log("Sending keepAlive request")
-                listenKey = await _keepAlive(listenKey);
+                listenKey = await _keepAlive(listenKey);        // sets a new listen key in case it changed
                 refreshTime = new Date();
             }
         }, 1000 * 60)
