@@ -18,6 +18,6 @@ describe('mapParamsToQuery call', () => {
 
 describe('getPrivateKey call', () => {
     test('private key is in /test directory', () => {
-        expect(typeof getPrivateKey() === 'undefined').toBe(false);
+        expect(getPrivateKey() === false).toBe(false);
     })
 })
