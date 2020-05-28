@@ -55,7 +55,7 @@ const exit = () => {
 /**
  * Subscribes to observable and defines logic for all events throughout the app.
  * Runs main menu function.
- * @param {WebSocket} ws websocket stream inscance
+ * @param {WebSocket} ws websocket stream instance
  * @param {Object} exchange data needed by the app. stored in memory.
  */
 const _start = async (ws, exchange) => {
@@ -411,7 +411,7 @@ const _getTradeString = order => {
 }
 
 /**
- * Renders an Inquirer prompt from imported from lib/helpers/questions.js.
+ * Renders an Inquirer prompt imported from lib/helpers/questions.js.
  * @param {string} action action to be prompted
  * @param {*} inputData data needed for prompt rendering
  */
