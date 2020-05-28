@@ -16,6 +16,11 @@ const { questions } = require('../lib');
 // globals
 const obs = new Rx.Subject();    // observable
 
+
+/**
+ * Public start function. This is first function run on app start
+ * Calls private _start function which contains app logic
+ */
 const start = async () => {
     // load data needed for app to work
     // start userStream in the background
@@ -34,15 +39,25 @@ const start = async () => {
         _log(chalk.red(`Error connecting to stream!`))
         return false
     }
-    
+
     await _start(ws, exchange);
 }
 
+/**
+ * This is the last function app will run
+ * Exits the program
+ */
 const exit = () => {
     _log(chalk.blue("Thank you for visiting! Come again... 👋"), pad=true);
     process.exit(0);
 }
 
+/**
+ * Subscribes to observable and defines logic for all events throughout the app
+ * Runs main menu function
+ * @param {WebSocket} ws websocket stream inscance
+ * @param {Object} exchange data needed by the app. stored in memory
+ */
 const _start = async (ws, exchange) => {
     let streamData = {orders: [], delay: 0};
 
@@ -183,6 +198,10 @@ const _start = async (ws, exchange) => {
     await runMain(exchange);
 }
 
+/**
+ * This is the main menu. Prompts user for action and emits the action to the observable
+ * @param {Object} exchange exchange metadata such as supported pairs
+ */
 const runMain = async exchange => {
     let symbol;
     const supportedPairs = exchange.symbols.map(e => e.symbol);
@@ -284,7 +303,12 @@ const runMain = async exchange => {
     }
 }
 
-
+/**
+ * Top level function for handling websocket stream data
+ * Calls other handler functions based on type of data
+ * Returns handled data
+ * @param {Object} streamData data frame from websocket stream
+ */
 const _handleStreamData = streamData => {
     let result = { done: false };           // default
     if (streamData.e === 'executionReport') {
@@ -294,6 +318,13 @@ const _handleStreamData = streamData => {
     return result
 }
 
+/**
+ * Handler function to handle executionReport type data frames
+ * Main goal is to measure delay of these data frames.
+ * Logs trade messages from stream to console
+ * Returns Object with measured delay and flag if current delay check session should be terminated
+ * @param {Object} report data frame from websocket stream
+ */
 const _handleExecutionReport = report => {
     let done = false;
     let delay = _getDelay(report.T);
@@ -322,6 +353,10 @@ const _handleExecutionReport = report => {
     return {delay: delay, done: done}
 }
 
+/**
+ * Parses trade data frame and returns Object of delays summary
+ * @param {Array} reportData array of trade data frames
+ */
 const _getDelayReport = reportData => {
     // filter unwanted events
     const orders = reportData.orders.filter(item => ['NEW', 'TRADE'].includes(item.x))
@@ -347,6 +382,10 @@ const _getDelayReport = reportData => {
     }
 }
 
+/**
+ * Helper function, returns string with parsed data from trade data frames
+ * @param {Array} orders array of trade data frames
+ */
 const _getTradeDelayString = orders => {
     let delays = orders.map(item => {
         return `Trade ID: ${item.c} | Symbol: ${item.s} | Type: ${item.o} | Delay: ${chalk.bold(item.delay)} ms`;
@@ -355,6 +394,10 @@ const _getTradeDelayString = orders => {
     return delays.join('\n');
 }
 
+/**
+ * Helper function, returns string with parsed data from new trade
+ * @param {Object} orders Response object of successful new trade submitted
+ */
 const _getTradeString = order => {
     let orderString = [
         `Trade ID: ${order.clientOrderId}`,
@@ -367,7 +410,11 @@ const _getTradeString = order => {
     return orderString.join('\n')
 }
 
-
+/**
+ * Renders an Inquirer prompt from imported from lib/helpers/questions.js
+ * @param {string} action action to be prompted
+ * @param {*} inputData data needed for prompt rendering
+ */
 const _promptAction = async (action, inputData) => {
     const qs = questions[action](inputData);
     const answers = await inquirer.prompt(qs);
@@ -376,10 +423,21 @@ const _promptAction = async (action, inputData) => {
 
 
 // Helpers
+
+/**
+ * Returns difference of incoming timestamp and now (delay)
+ * @param {number} responseTime timestamp
+ */
 const _getDelay = responseTime => {
     return new Date().getTime() - responseTime;
 }
 
+/**
+ * Helper function to log input to console with some additional features
+ * Here logging feature can be added in the future.
+ * @param {string} input input to be logged to console
+ * @param {Boolean} pad true if input should be padded by empty lines
+ */
 const _log = (input, pad=false) => {
     if (pad) {
         input = _padResponse(input);

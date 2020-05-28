@@ -18,6 +18,21 @@ const API_URI = "/api/v3";
 const STREAM_URI = "/stream";
 
 
+/**
+ * Submits a request to API with incoming parameters
+ * Handles auth automatically (see authRequired and signatureRequired params)
+ * Maps request parameters to query string (empty string for empty params object)
+ * POST request with body currently not supported
+ * 
+ * Returns Object with either response data or error and 'ok' flag indicating if request failed or succeeded
+ * @param {Object} params request parameters
+ * @param {Object} headers request headers 
+ * @param {string} method request method
+ * @param {string} endpoint api endpoint
+ * @param {string} apiUri api uri, this is concatenated after root URL
+ * @param {Boolean} authRequired if true, auth header will be added
+ * @param {Boolean} signatureRequired if true signature and timestamp will be added to query string
+ */
 const _fetchData = async ({
     params = {},
     headers = {},
@@ -45,6 +60,7 @@ const _fetchData = async ({
     }
     
     if (signatureRequired) {
+        params.timestamp = new Date().getTime();   // add timestamp to requests with auth
         params.signature = await _signRequest(params);    // create signature
     }
 
@@ -77,14 +93,20 @@ const _fetchData = async ({
     }
 }
 
+
+/**
+ * Public wrapper function for _fetchApi method
+ * Returns response Object
+ * @param {Object} args request params
+ */
 const fetchApi = async args => {
-    // let signatureRequired = args.signatureRequired || false;    // defalut false
-    if (args.signatureRequired) {
-        args.params.timestamp = new Date().getTime();   // add timestamp to requests with auth
-    }
     return await _fetchData({...args, apiUri: API_URI})
 }
 
+/**
+ * Returns HMAC signature of request parameters parsed to queryString;
+ * @param {Object} params request parameters
+ */
 const _signRequestHMAC = async params => {
     const queryString = mapParamsToQuery(params);
     const signature = createHmac('sha256', SECRET_KEY.toString())
@@ -93,6 +115,12 @@ const _signRequestHMAC = async params => {
 
     return signature;
 }
+
+/**
+ * Signs request parameters with private key saved locally, converted to base64
+ * Returns URL encoded signature
+ * @param {Object} params request parameters
+ */
 const _signRequest = async params => {
     const queryString = mapParamsToQuery(params);
     
@@ -141,6 +169,16 @@ const _keepAlive = async key => {
     return refreshed.listenKey;
 }
 
+/**
+ * Subscribes to Binance websocket stream.
+ * Sends pong on every ping, also sends unsolicited pong frames to prevent from websocket from unexpected closing
+ * Sends keepAlive request every 30 mins
+ * Frames coming from websocket are emitted to the observable
+ * 
+ * Returns websocket instance
+ * @param {Boolean} auth if true, subscribes to user data stream
+ * @param {Rx.Subject} obs rx observable
+ */
 const subscribeStream = async (auth=true, obs) => {
     let listenKey, refreshTime, pongInterval;
     let url = `${PROTOCOL_STREAM}${ROOT_URL}${STREAM_URI}`;

@@ -6,23 +6,17 @@ const { helpers: { saveExchangeData, readExchangeData } } = require('../lib')
 // ================= metadata functions START =================
 
 
+/**
+ * Returns data from exchangeInfo endpoint.
+ */
 const initExchange = async () => {
-    let saved;
     const data = await _getExchangeData()
-    
-    try {
-        saved = await saveExchangeData({...data, last_saved: new Date().getTime()})    // save to fs
-    } catch (err) {
-        console.log(err)
-    }
-
-    if (!saved) {
-        console.log("Error saving file to FS!");
-    }
-
     return data
 }
 
+/**
+ * Returns account data from 'account' endpoint
+ */
 const getAccountInfo = async () => {
     const data = await _fetch({
         endpoint: "account", 
@@ -34,6 +28,10 @@ const getAccountInfo = async () => {
     return data;
 }
 
+/**
+ * Returns data from exchangeInfo api endpoint and saves to filesystem.
+ * If data is already saved and not older than 1 day, then cached data is returned
+ */
 const _getExchangeInfo = async () => {
     // read cached data
     let cached;
@@ -50,12 +48,24 @@ const _getExchangeInfo = async () => {
     let exchangeInfo = await _fetch({endpoint: 'exchangeInfo'});
 
     if (!exchangeInfo.ok) {
+        console.log(`Error fetching exchange data from 'exchangeInfo' endpoint ${JSON.stringify(exchangeInfo)}`);
         return false;
+    }
+
+    try {
+        await saveExchangeData({...exchangeInfo.data, last_saved: new Date().getTime()})    // save fresh data to fs
+    } catch (err) {
+        console.log("Error saving file to FS!");
+        console.log(err)
     }
 
     return exchangeInfo.data;
 }
 
+/**
+ * wrapper function for getting required data for app startup
+ * more things can be added here
+ */
 const _getExchangeData = async () => {
     let exchange = await _getExchangeInfo();
     return {exchange: exchange}
@@ -66,6 +76,12 @@ const _getExchangeData = async () => {
 
 // ================= trade functions START =================
 
+
+/**
+ * Submits new order
+ * If the order type is 'LIMIT' the parameters are transformed to conform to exchange filters
+ * @param {Object} params Object with parameters needed for new order
+ */
 const createOrder = async params => {
     if (!params) {
         return false;
@@ -89,6 +105,14 @@ const createOrder = async params => {
 }
 
 
+/**
+ * Transforms the order parameters to be valid for 'LIMIT' order
+ * If priceModifier parameter came, then the price is calculated as currentPrice * priceModifier
+ * Applies filters on symbol based on settings in from exchangeInfo
+ * 
+ * Returns transformed parameters Object
+ * @param {Object} order Order parameters to be transformed
+ */
 const _transformLimitOrder = async order => {
     const newParams = {...order};
     const price = await getSymbolPrice(order.symbol);         // get current order price
@@ -138,6 +162,13 @@ const _transformLimitOrder = async order => {
     return newParams;
 }
 
+/**
+ * Checks if price is within valid range
+ * Applies fix to price precision based on tickSize filter
+ * Returns transformed price
+ * @param {number} price Input price
+ * @param {Object} filter Object with filter rules for this symbol
+ */
 const _priceFilter = (price, filter) => {
     // max price
     if (price > filter.maxPrice) {
@@ -156,6 +187,12 @@ const _priceFilter = (price, filter) => {
     return fixedPrice
 }
 
+/**
+ * Checks if price is within valid range
+ * Returns true or throws error
+ * @param {number} price Input price
+ * @param {Object} filter Object with filter rules for this symbol
+ */
 const _percentPrice = (price, filter) => {
     // for simplicity assume weightedAverage is same or similar to last price
     if (price > price * filter.multiplierUp) {
@@ -168,10 +205,21 @@ const _percentPrice = (price, filter) => {
     return true;
 }
 
+/**
+ * Returns filter from array of filters
+ * @param {string} name name of filter to be returned
+ * @param {Array} arr array of all filters
+ */
 const _getFilter = (name, arr) => {
     return arr.filter(item => item.filterType === name)[0];
 }
 
+
+/**
+ * Returns array of open orders
+ * @param {string} symbol
+ * @param {Boolean} all true to get open orders for all coins, default false
+ */
 const getOpenOrders = async (symbol, all=false) => {
     let params = all ? {symbol: symbol} : {};
     
@@ -185,6 +233,12 @@ const getOpenOrders = async (symbol, all=false) => {
     return orders
 }
 
+
+/**
+ * Cancels order for symbol
+ * Returns response Object
+ * @param {string} symbol 
+ */
 const cancelOrders = async symbol => {
     const orders = await _fetch({
         endpoint: 'openOrders',
@@ -199,7 +253,10 @@ const cancelOrders = async symbol => {
     return orders
 }
 
-
+/**
+ * Returns object containing current price for symbol
+ * @param {string} symbol 
+ */
 const getSymbolPrice = async symbol => {
     const res = await _fetch({
         endpoint: 'ticker/price',
@@ -216,7 +273,6 @@ const getSymbolPrice = async symbol => {
 
 
 module.exports = {
-    // subscribeStream: subscribeStream,
     createOrder: createOrder,
     getOpenOrders: getOpenOrders,
     cancelOrders: cancelOrders,
