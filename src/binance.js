@@ -35,8 +35,8 @@ const _getExchangeInfo = async () => {
     let cached;
     try {
         cached = await readExchangeData();
-        if (new Date().getTime() - cached.last_saved > 1000 * 60 * 60 * 24) {       // 1 day
-            return cached.exchange;
+        if (new Date().getTime() - cached.last_saved < 1000 * 60 * 60 * 24) {       // 1 day
+            return cached;
         }
     } catch (err) {
         // file doesnt exist yet
